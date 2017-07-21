@@ -956,3 +956,108 @@ function midrule(callable $midrule, bool $isFallible = true) : Parser
         }
     };
 }
+
+const SYMBOL_TABLE = [
+    'nullary' => [
+        T_LNUMBER, ';',
+    ],
+    'unary' => [
+        T_CLONE, T_NEW,
+        T_INC, T_DEC, '~', T_INT_CAST, T_DOUBLE_CAST, T_STRING_CAST, T_ARRAY_CAST, T_OBJECT_CAST, T_BOOL_CAST, '@',
+        '!',
+        '+', '-',
+    ],
+    'binary' => [
+        T_POW,
+        T_INSTANCEOF,
+        '*', '/', '%',
+        '+', '-', '.',
+        T_SL, T_SR,
+        '<', T_IS_SMALLER_OR_EQUAL, '>', T_IS_GREATER_OR_EQUAL,
+        T_IS_EQUAL, T_IS_NOT_EQUAL, T_IS_IDENTICAL, T_IS_NOT_IDENTICAL, T_SPACESHIP,
+    ],
+    'bp' => [
+        T_CLONE => 210, T_NEW => 210,
+        T_POW => 200,
+        T_INC => 190, T_DEC => 190, '~' => 190, T_INT_CAST => 190, T_DOUBLE_CAST => 190, T_STRING_CAST => 190, T_ARRAY_CAST => 190, T_OBJECT_CAST => 190, T_BOOL_CAST => 190, '@' => 190,
+        T_INSTANCEOF => 180,
+        '!' => 170,
+        '*' => 160, '/' => 160, '%' => 160,
+        '+' => 150, '-' => 150, '.' => 150,
+        T_SL => 140, T_SR => 140,
+        '<' => 130, T_IS_SMALLER_OR_EQUAL => 130, '>' => 130, T_IS_GREATER_OR_EQUAL => 130,
+        T_IS_EQUAL => 120, T_IS_NOT_EQUAL => 120, T_IS_IDENTICAL => 120, T_IS_NOT_IDENTICAL => 120, T_SPACESHIP => 120,
+
+        T_LNUMBER => 0, ';' => 0,
+    ],
+];
+
+function expr($rbp = 0, $symbolTable = SYMBOL_TABLE) : Parser
+{
+    return new  class(__FUNCTION__, $rbp, $symbolTable) extends Parser
+    {
+        protected function parser(TokenStream $ts, $rbp, $symbolTable) /*: Result|null*/
+        {
+            $nud = function (Token $token) use ($ts, $symbolTable) {
+                if (in_array($token->type(), $symbolTable['nullary'])) {
+                    return $token;
+                }
+
+                if (in_array($token->type(), $symbolTable['unary'])) {
+                    $right = expr($symbolTable['bp'][$token->type()], $symbolTable)->parse($ts);
+
+                    if ($right instanceof Ast) {
+                        return [
+                            $token,
+                            $right->unwrap()
+                        ];
+                    }
+
+                    return null;
+                }
+
+                return null;
+            };
+
+            $led = function (Token $token, $left) use ($ts, $rbp, $symbolTable) {
+                $right = expr($symbolTable['bp'][$token->type()], $symbolTable)->parse($ts);
+
+                if ($right instanceof Ast) {
+                    return [
+                        $left,
+                        $token,
+                        $right->unwrap()
+                    ];
+                }
+
+                return null;
+            };
+
+            $token = $ts->current();
+            $ts->next();
+            $left = $nud($token);
+            if ($left === null) {
+                return $this->error($ts);
+            }
+            while ($rbp < $symbolTable['bp'][$ts->current()->type()]) {
+                $token = $ts->current();
+                $ts->next();
+                $left = $led($token, $left);
+                if ($left === null) {
+                    return $this->error($ts);
+                }
+            }
+
+            return new Ast($this->label, $left);
+        }
+
+        function expected() : Expected {
+            return new Expected;
+        }
+
+        function isFallible() : bool
+        {
+            return true;
+        }
+    };
+}

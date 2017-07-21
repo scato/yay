@@ -979,4 +979,14 @@ class ParserTest extends \PHPUnit_Framework_TestCase {
         $this->assertNull($ast->{'interface methods 2 is abstract'});
         $this->assertNull($ast->{'interface methods 2 is static'});
     }
+
+    function testExpr() {
+        $ts = TokenStream::fromSource("<?php \$x = 1 + 2 * -3;");
+
+        $this->parseSuccess($ts, token(T_OPEN_TAG), "T_OPEN_TAG(<?php )");
+        $this->parseSuccess($ts, token(T_VARIABLE), "T_VARIABLE(\$x)");
+        $this->parseSuccess($ts, token('='), "'='");
+        $this->parseSuccess($ts, expr(), "T_LNUMBER(1), '+', T_LNUMBER(2), '*', '-', T_LNUMBER(3)");
+        $this->parseSuccess($ts, token(';'), "';'");
+    }
 }

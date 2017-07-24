@@ -21,7 +21,7 @@ class ExprTest extends \PHPUnit_Framework_TestCase {
 
         $dump = function ($node) use (&$dump) {
             if (is_array($node)) {
-                return '(' . implode(', ', array_map($dump, $node)) . ')';
+                return '[' . implode(', ', array_map($dump, $node)) . ']';
             }
 
             if ($node instanceof Token) {
@@ -39,13 +39,13 @@ class ExprTest extends \PHPUnit_Framework_TestCase {
     function providerForTestPriority() {
         return [
             // cloning has higher priority than exponentiation
-            ['clone $x ** 2', "((T_CLONE(clone), T_VARIABLE(\$x)), T_POW(**), T_LNUMBER(2))"],
+            ['clone $x ** 2', "[[T_CLONE(clone), T_VARIABLE(\$x)], T_POW(**), T_LNUMBER(2)]"],
 
             // exponentiation has higher priority than casting
-            ['(bool) 1 ** 2', "(T_BOOL_CAST((bool)), (T_LNUMBER(1), T_POW(**), T_LNUMBER(2)))"],
+            ['(bool) 1 ** 2', "[T_BOOL_CAST((bool)), [T_LNUMBER(1), T_POW(**), T_LNUMBER(2)]]"],
 
             // multiplication has higher priority than addition
-            ['1 + 2 * 3', "(T_LNUMBER(1), '+', (T_LNUMBER(2), '*', T_LNUMBER(3)))"],
+            ['1 + 2 * 3', "[T_LNUMBER(1), '+', [T_LNUMBER(2), '*', T_LNUMBER(3)]]"],
         ];
     }
 
@@ -62,13 +62,13 @@ class ExprTest extends \PHPUnit_Framework_TestCase {
     function providerForTestAssociativity() {
         return [
             // exponentiation is right associative
-            ['1 ** 2 ** 3', "(T_LNUMBER(1), T_POW(**), (T_LNUMBER(2), T_POW(**), T_LNUMBER(3)))"],
+            ['1 ** 2 ** 3', "[T_LNUMBER(1), T_POW(**), [T_LNUMBER(2), T_POW(**), T_LNUMBER(3)]]"],
 
             // pre-increment and post-increment are right associative
-            ['--$x++', "(T_DEC(--), (T_VARIABLE(\$x), T_INC(++)))"],
+            ['--$x++', "[T_DEC(--), [T_VARIABLE(\$x), T_INC(++)]]"],
 
             // addition is left associative
-            ['1 + 2 + 3', "((T_LNUMBER(1), '+', T_LNUMBER(2)), '+', T_LNUMBER(3))"],
+            ['1 + 2 + 3', "[[T_LNUMBER(1), '+', T_LNUMBER(2)], '+', T_LNUMBER(3)]"],
         ];
     }
 

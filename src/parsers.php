@@ -959,23 +959,31 @@ function midrule(callable $midrule, bool $isFallible = true) : Parser
 
 const SYMBOL_TABLE = [
     'nullary' => [
-        T_LNUMBER, ';',
+        T_LNUMBER, T_VARIABLE, ';',
     ],
-    'unary' => [
+    'prefix' => [
         T_CLONE, T_NEW,
         T_INC, T_DEC, '~', T_INT_CAST, T_DOUBLE_CAST, T_STRING_CAST, T_ARRAY_CAST, T_OBJECT_CAST, T_BOOL_CAST, '@',
         '!',
         '+', '-',
     ],
-    'binary' => [
-        T_POW,
-        T_INSTANCEOF,
-        '*', '/', '%',
-        '+', '-', '.',
-        T_SL, T_SR,
-        '<', T_IS_SMALLER_OR_EQUAL, '>', T_IS_GREATER_OR_EQUAL,
-        T_IS_EQUAL, T_IS_NOT_EQUAL, T_IS_IDENTICAL, T_IS_NOT_IDENTICAL, T_SPACESHIP,
+    'postfix' => [
+        T_INC, T_DEC,
     ],
+//    'left' => [
+//        T_POW,
+//        T_INSTANCEOF,
+//        '*', '/', '%',
+//        '+', '-', '.',
+//        T_SL, T_SR,
+//        '<', T_IS_SMALLER_OR_EQUAL, '>', T_IS_GREATER_OR_EQUAL,
+//        T_IS_EQUAL, T_IS_NOT_EQUAL, T_IS_IDENTICAL, T_IS_NOT_IDENTICAL, T_SPACESHIP,
+//    ],
+    'right' => [
+        T_POW,
+    ],
+//    'ternary' => [
+//    ],
     'bp' => [
         T_CLONE => 210, T_NEW => 210,
         T_POW => 200,
@@ -1003,8 +1011,9 @@ function expr($rbp = 0, $symbolTable = SYMBOL_TABLE) : Parser
                     return $token;
                 }
 
-                if (in_array($token->type(), $symbolTable['unary'])) {
-                    $right = expr($symbolTable['bp'][$token->type()], $symbolTable)->parse($ts);
+                if (in_array($token->type(), $symbolTable['prefix'])) {
+                    // all prefix operators are right associative, so subtract 1
+                    $right = expr($symbolTable['bp'][$token->type()] - 1, $symbolTable)->parse($ts);
 
                     if ($right instanceof Ast) {
                         return [
@@ -1019,8 +1028,19 @@ function expr($rbp = 0, $symbolTable = SYMBOL_TABLE) : Parser
                 return null;
             };
 
-            $led = function (Token $token, $left) use ($ts, $rbp, $symbolTable) {
-                $right = expr($symbolTable['bp'][$token->type()], $symbolTable)->parse($ts);
+            $led = function (Token $token, $left) use ($ts, $symbolTable) {
+                if (in_array($token->type(), $symbolTable['postfix'])) {
+                    return [
+                        $left,
+                        $token
+                    ];
+                }
+
+                if (in_array($token->type(), $symbolTable['right'])) {
+                    $right = expr($symbolTable['bp'][$token->type()] - 1, $symbolTable)->parse($ts);
+                } else {
+                    $right = expr($symbolTable['bp'][$token->type()], $symbolTable)->parse($ts);
+                }
 
                 if ($right instanceof Ast) {
                     return [
@@ -1039,7 +1059,7 @@ function expr($rbp = 0, $symbolTable = SYMBOL_TABLE) : Parser
             if ($left === null) {
                 return $this->error($ts);
             }
-            while ($rbp < $symbolTable['bp'][$ts->current()->type()]) {
+            while ($ts->current() !== null && $rbp < $symbolTable['bp'][$ts->current()->type()]) {
                 $token = $ts->current();
                 $ts->next();
                 $left = $led($token, $left);
